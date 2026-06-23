@@ -43,6 +43,8 @@ export const reliefFragmentShader = /* glsl */ `
   uniform sampler2D uTrail;     // screen-space reveal mask
   uniform sampler2D uPlaster;
   uniform vec2  uPlasterScale;
+  uniform float uUseColor;      // 1 = solid colour background instead of plaster
+  uniform vec3  uBgColor;       // the solid background colour (raw sRGB 0..1)
   uniform float uEmissiveWeight;   // how much the emissive pass adds to shading
   uniform float uMid;              // luminance of the flat (uncarved) surface
   uniform float uReliefStrength;   // how strongly raised detail brightens
@@ -69,10 +71,41 @@ export const reliefFragmentShader = /* glsl */ `
 
   const vec3 LUMA = vec3(0.299, 0.587, 0.114);
 
+  // value noise + fbm, used to wobble the reveal boundary into a liquid blob
+  float hash21(vec2 p) {
+    p = fract(p * vec2(123.34, 345.45));
+    p += dot(p, p + 34.345);
+    return fract(p.x * p.y);
+  }
+  float vnoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    float a = hash21(i);
+    float b = hash21(i + vec2(1.0, 0.0));
+    float c = hash21(i + vec2(0.0, 1.0));
+    float d = hash21(i + vec2(1.0, 1.0));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+  }
+  float fbm(vec2 p) {
+    float v = 0.0, amp = 0.5;
+    for (int i = 0; i < 3; i++) { v += amp * vnoise(p); p *= 2.0; amp *= 0.5; }
+    return v;
+  }
+
   void main() {
     vec2 screenUv = vClip.xy / vClip.w * 0.5 + 0.5;
 
-    float mask = texture2D(uTrail, screenUv).r;
+    // wobble: warp where we read the reveal mask with flowing fbm noise, so the
+    // round brush dissolves into an organic, rippling liquid blob.
+    float et = uTime * 0.6;                       // flow speed
+    vec2 ec = screenUv * 3.5;                      // lobe size (lower = bigger)
+    vec2 edgeFlow = vec2(
+      fbm(ec + vec2(0.0, et)),
+      fbm(ec + vec2(et, 0.0) + 17.3)
+    ) - 0.5;
+    vec2 maskUv = screenUv + edgeFlow * 0.14;      // wobble amount
+
+    float mask = texture2D(uTrail, maskUv).r;
     mask = clamp(mask + uReveal, 0.0, 1.0);
     mask = pow(mask, uContrast); // sharpen the emergence
 
@@ -119,9 +152,10 @@ export const reliefFragmentShader = /* glsl */ `
     caustic = pow(caustic, 3.0) * uCaustic * mask * uWateryOn;
 
     vec3 plaster = texture2D(uPlaster, screenUv * uPlasterScale).rgb;
-    vec3 relief = plaster * uTint * (1.0 + shade) + glint + caustic;
+    vec3 bg = mix(plaster, uBgColor, uUseColor);
+    vec3 relief = bg * uTint * (1.0 + shade) + glint + caustic;
 
-    vec3 col = mix(plaster, relief, mask);
+    vec3 col = mix(bg, relief, mask);
     gl_FragColor = vec4(col, 1.0);
   }
 `;
@@ -130,9 +164,12 @@ export const plasterFragmentShader = /* glsl */ `
   precision highp float;
   uniform sampler2D uPlaster;
   uniform vec2 uPlasterScale;
+  uniform float uUseColor;
+  uniform vec3 uBgColor;
   varying vec2 vUv;
   void main() {
-    gl_FragColor = vec4(texture2D(uPlaster, vUv * uPlasterScale).rgb, 1.0);
+    vec3 plaster = texture2D(uPlaster, vUv * uPlasterScale).rgb;
+    gl_FragColor = vec4(mix(plaster, uBgColor, uUseColor), 1.0);
   }
 `;
 

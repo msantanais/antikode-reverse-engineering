@@ -14,7 +14,7 @@ const serif = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "Immersive Garden — cursor trail study",
+  title: "Immersive - Reverse Engineering",
   description:
     "Reverse-engineered cursor-trail relief reveal, rebuilt with React Three Fiber.",
 };

@@ -27,6 +27,9 @@ type Props = {
   trailRef: React.MutableRefObject<THREE.Texture | null>;
   plaster: THREE.Texture;
   plasterScale: THREE.Vector2;
+  /** when true, use a solid colour background instead of the plaster texture */
+  useColorBg?: boolean;
+  bgColor?: THREE.Vector3;
   /** global reveal floor that always shows the relief a little */
   reveal?: number;
   tint?: THREE.Color;
@@ -61,6 +64,8 @@ export function Relief({
   trailRef,
   plaster,
   plasterScale,
+  useColorBg = false,
+  bgColor,
   reveal = 0,
   tint,
   contrast = 1.35,
@@ -141,6 +146,8 @@ export function Relief({
           uTrail: { value: null },
           uPlaster: { value: plaster },
           uPlasterScale: { value: plasterScale },
+          uUseColor: { value: useColorBg ? 1 : 0 },
+          uBgColor: { value: bgColor ?? new THREE.Vector3(0, 0, 0) },
           uEmissiveWeight: { value: emissiveWeight },
           uMid: { value: mid },
           uReliefStrength: { value: reliefStrength },

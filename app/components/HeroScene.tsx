@@ -14,16 +14,31 @@ import {
 
 const PLASTER_URL = "/home/plaster.jpg";
 const PLASTER_TILE = 1.4;
-// neutral tint: keep the relief the same grey as the plaster background
+// neutral tint: keep the relief the same tone as the background
 const GREY_TINT = new THREE.Color(1, 1, 1);
 
-/** Fullscreen plaster background; matches the relief's unrevealed plaster. */
+/** Parse "#rrggbb" into a raw (un-managed) sRGB 0..1 vec3, so it composites
+ *  WYSIWYG in our raw ShaderMaterials (no colour-space conversion). */
+function hexToRawVec(hex: string): THREE.Vector3 {
+  const h = hex.replace("#", "");
+  const f =
+    h.length === 3
+      ? h.split("").map((c) => parseInt(c + c, 16))
+      : [h.slice(0, 2), h.slice(2, 4), h.slice(4, 6)].map((c) => parseInt(c, 16));
+  return new THREE.Vector3(f[0] / 255, f[1] / 255, f[2] / 255);
+}
+
+/** Fullscreen background; either the plaster texture or a solid colour. */
 function PlasterBackground({
   plaster,
   plasterScale,
+  useColorBg,
+  bgColor,
 }: {
   plaster: THREE.Texture;
   plasterScale: THREE.Vector2;
+  useColorBg: boolean;
+  bgColor: THREE.Vector3;
 }) {
   const material = useMemo(
     () =>
@@ -35,9 +50,11 @@ function PlasterBackground({
         uniforms: {
           uPlaster: { value: plaster },
           uPlasterScale: { value: plasterScale },
+          uUseColor: { value: useColorBg ? 1 : 0 },
+          uBgColor: { value: bgColor },
         },
       }),
-    [plaster, plasterScale],
+    [plaster, plasterScale, useColorBg, bgColor],
   );
 
   return (
@@ -52,17 +69,22 @@ function Experience({
   isWatery,
   isMagnifying,
   isArise,
+  bgColor,
 }: {
   relief: ReliefName;
   isWatery: boolean;
   isMagnifying: boolean;
   isArise: boolean;
+  bgColor?: string;
 }) {
   const { size } = useThree();
+
+  const useColorBg = !!bgColor;
+  const bgVec = useMemo(() => hexToRawVec(bgColor ?? "#000000"), [bgColor]);
   const trailRef = useCursorTrail({
     decay: 0.98,
-    radius: 0.2,
-    ease: 0.13,
+    radius: 0.18,
+    ease: 0.1,
     auto: true,
     autoRadius: 0.18,
     autoShow: 0.8,
@@ -94,14 +116,21 @@ function Experience({
 
   return (
     <>
-      <PlasterBackground plaster={plaster} plasterScale={plasterScale} />
+      <PlasterBackground
+        plaster={plaster}
+        plasterScale={plasterScale}
+        useColorBg={useColorBg}
+        bgColor={bgVec}
+      />
       <Suspense fallback={null}>
         <Relief
           name={relief}
           trailRef={trailRef}
           plaster={plaster}
           plasterScale={plasterScale}
-          contrast={1.4}
+          useColorBg={useColorBg}
+          bgColor={bgVec}
+          contrast={0.7}
           reveal={revealFloor}
           introFrom={introFrom}
           tint={GREY_TINT}
@@ -114,7 +143,7 @@ function Experience({
           isMagnifying={isMagnifying}
           magStrength={0.8}
           isArise={isArise}
-          rise={0.2}
+          rise={0.4}
         />
       </Suspense>
     </>
@@ -126,11 +155,14 @@ export default function HeroScene({
   isWatery = false,
   isMagnifying = false,
   isArise = false,
+  bgColor,
 }: {
   relief?: ReliefName;
   isWatery?: boolean;
   isMagnifying?: boolean;
   isArise?: boolean;
+  /** hex like "#2596be" to use a solid colour background; omit for plaster */
+  bgColor?: string;
 }) {
   return (
     <Canvas
@@ -139,13 +171,14 @@ export default function HeroScene({
       gl={{ antialias: true, alpha: false }}
       style={{ position: "absolute", inset: 0 }}
     >
-      <color attach="background" args={["#e9e7e2"]} />
+      <color attach="background" args={[bgColor ?? "#e9e7e2"]} />
       <Suspense fallback={null}>
         <Experience
           relief={relief}
           isWatery={isWatery}
           isMagnifying={isMagnifying}
           isArise={isArise}
+          bgColor={bgColor}
         />
       </Suspense>
     </Canvas>
